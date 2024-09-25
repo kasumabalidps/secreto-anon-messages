@@ -40,7 +40,11 @@ const SecretList = ({ secrets, userIsOwner }) => {
               <div className="flex flex-col">
                 <div className="flex-grow overflow-hidden mb-2">
                   <p className="text-white break-words whitespace-pre-wrap">
-                    {secret.is_owner && <span className="font-bold mr-2 text-yellow-400">Owner (👑) </span>}
+                    {secret.is_owner ? (
+                      <span className="font-bold mr-2 text-yellow-400">Nando (👑)</span>
+                    ) : (
+                      <span className="font-bold mr-2 text-gray-400">User 🤷‍♂️</span>
+                    )}
                     {secret.content}
                   </p>
                 </div>
