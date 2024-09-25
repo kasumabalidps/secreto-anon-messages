@@ -17,9 +17,9 @@ const Comment = ({ comment, secretId, userIsOwner }) => {
         <div className="flex-grow overflow-hidden mb-2">
           <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">
             {comment.is_owner ? (
-              <span className="font-bold mr-2 text-yellow-400">Nando (👑)</span>
+              <span className="font-bold mr-1 text-yellow-400">Nando (👑):</span>
             ) : (
-              <span className="font-bold mr-2 text-gray-400">User 🤷‍♂️</span>
+              <span className="font-bold mr-1 text-gray-400">User 🤷‍♂️:</span>
             )}
             {comment.content}
           </p>
