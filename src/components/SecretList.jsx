@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, Heart, MessageCircle, Eye } from 'lucide-react';
 import Comment from './Comment';
@@ -6,8 +6,57 @@ import CommentForm from './CommentForm';
 import { supabase } from '../supabaseClient';
 import { reloadPage } from '../utils';
 
-const SecretList = ({ secrets, userIsOwner }) => {
+const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
+  const [secrets, setSecrets] = useState(initialSecrets);
   const [likedSecrets, setLikedSecrets] = useState({});
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('real-time likes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, handleMessageUpdate)
+      .subscribe();
+
+    fetchLikedSecrets();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchLikedSecrets = async () => {
+    const userIP = await getUserIP();
+    const { data: likes, error } = await supabase
+      .from('likes')
+      .select('message_id')
+      .eq('user_ip', userIP);
+
+    if (error) {
+      console.error('Error fetching liked secrets:', error);
+      return;
+    }
+
+    const likedSecretIds = likes.map(like => like.message_id);
+    setLikedSecrets(
+      likedSecretIds.reduce((acc, id) => ({ ...acc, [id]: true }), {})
+    );
+  };
+
+  const handleMessageUpdate = (payload) => {
+    const { new: updatedMessage } = payload;
+    setSecrets(prevSecrets =>
+      prevSecrets.map(secret =>
+        secret.id === updatedMessage.id
+          ? { ...secret, like_count: updatedMessage.like_count }
+          : secret
+      )
+    );
+  };
+
+  const getUserIP = async () => {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip;
+  };
 
   const deleteSecret = async (secretId) => {
     if (userIsOwner) {
@@ -17,7 +66,40 @@ const SecretList = ({ secrets, userIsOwner }) => {
   };
 
   const handleLike = async (secretId) => {
-    //here update selanjutnya
+    const userIP = await getUserIP();
+    
+    if (likedSecrets[secretId]) {
+      // Unlike
+      const { error } = await supabase
+        .from('likes')
+        .delete()
+        .match({ user_ip: userIP, message_id: secretId });
+
+      if (error) {
+        console.error('Error unliking secret:', error);
+        return;
+      }
+
+      setLikedSecrets(prev => ({ ...prev, [secretId]: false }));
+    } else {
+      // Like
+      const { error } = await supabase
+        .from('likes')
+        .insert({ user_ip: userIP, message_id: secretId });
+
+      if (error) {
+        console.error('Error liking secret:', error);
+        return;
+      }
+
+      setLikedSecrets(prev => ({ ...prev, [secretId]: true }));
+    }
+  };
+
+  const formatLikeCount = (count) => {
+    if (count < 1000) return count.toString();
+    if (count < 1000000) return (count / 1000).toFixed(1) + 'K';
+    return (count / 1000000).toFixed(1) + 'M';
   };
 
   if (!secrets || secrets.length === 0) {
@@ -63,7 +145,7 @@ const SecretList = ({ secrets, userIsOwner }) => {
                       className={`flex items-center ${likedSecrets[secret.id] ? 'text-red-500' : 'text-gray-400'} hover:text-red-700`}
                     >
                       <Heart size={16} className="mr-1" />
-                      <span>{secret.likes || 0}</span>
+                      <span>{formatLikeCount(secret.like_count)}</span>
                     </button>
                     <div className="flex items-center text-gray-400">
                       <MessageCircle size={16} className="mr-1" />
