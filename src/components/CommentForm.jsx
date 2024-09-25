@@ -34,7 +34,7 @@ const CommentForm = ({ secretId }) => {
       />
       <button 
         type="submit" 
-        className="mt-2 px-3 py-1 text-sm bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+        className="transition ease-in-out mt-2 px-3 py-1 text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 border border-gray-500"
       >
         Comment
       </button>
