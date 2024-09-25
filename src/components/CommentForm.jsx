@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { reloadPage, getUserIp, isOwner } from '../utils';
+import { getUserIp, isOwner } from '../utils';
 
 const CommentForm = ({ secretId }) => {
   const [commentText, setCommentText] = useState('');
@@ -9,16 +9,20 @@ const CommentForm = ({ secretId }) => {
     e.preventDefault();
     if (commentText.trim()) {
       const userIp = await getUserIp();
-      await supabase.from('replies').insert([
+      const { data, error } = await supabase.from('replies').insert([
         { 
           message_id: secretId, 
           content: commentText,
           ip_address: userIp,
           is_owner: isOwner(userIp)
         }
-      ]);
-      setCommentText('');
-      reloadPage();
+      ]).select();
+
+      if (error) {
+        console.error('Error adding comment:', error);
+      } else {
+        setCommentText('');
+      }
     }
   };
 

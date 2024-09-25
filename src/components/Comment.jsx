@@ -1,14 +1,11 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
-import { reloadPage } from '../utils';
 
-const Comment = ({ comment, secretId, userIsOwner }) => {
-  const handleDelete = async () => {
-    if (userIsOwner) {
-      await supabase.from('replies').delete().match({ id: comment.id });
-      reloadPage();
-    }
+const Comment = ({ comment, secretId, userIsOwner, onDelete }) => {
+  const handleDelete = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onDelete(comment.id, secretId);
   };
 
   return (
@@ -17,7 +14,7 @@ const Comment = ({ comment, secretId, userIsOwner }) => {
         <div className="flex-grow overflow-hidden mb-2">
           <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">
             {comment.is_owner ? (
-              <span className="font-bold mr-1 text-yellow-400">Nando (👑):</span>
+              <span className="font-bold mr-1 text-yellow-400">Nando 👑:</span>
             ) : (
               <span className="font-bold mr-1 text-gray-400">User 🤷‍♂️:</span>
             )}
@@ -29,7 +26,7 @@ const Comment = ({ comment, secretId, userIsOwner }) => {
           {userIsOwner && (
             <button 
               onClick={handleDelete}
-              className="text-red-500 hover:text-red-700"
+              className="text-red-500 hover:text-red-700 p-1"
             >
               <Trash2 size={14} />
             </button>

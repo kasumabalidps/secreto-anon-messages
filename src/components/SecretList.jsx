@@ -4,22 +4,27 @@ import { Trash2, Heart, MessageCircle, Eye } from 'lucide-react';
 import Comment from './Comment';
 import CommentForm from './CommentForm';
 import { supabase } from '../supabaseClient';
-import { reloadPage } from '../utils';
 
 const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
   const [secrets, setSecrets] = useState(initialSecrets);
   const [likedSecrets, setLikedSecrets] = useState({});
 
   useEffect(() => {
-    const channel = supabase
-      .channel('real-time likes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, handleMessageUpdate)
+    const messageChannel = supabase
+      .channel('messages_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, handleMessageChange)
+      .subscribe();
+
+    const replyChannel = supabase
+      .channel('replies_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'replies' }, handleReplyChange)
       .subscribe();
 
     fetchLikedSecrets();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(messageChannel);
+      supabase.removeChannel(replyChannel);
     };
   }, []);
 
@@ -41,15 +46,50 @@ const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
     );
   };
 
-  const handleMessageUpdate = (payload) => {
-    const { new: updatedMessage } = payload;
-    setSecrets(prevSecrets =>
-      prevSecrets.map(secret =>
-        secret.id === updatedMessage.id
-          ? { ...secret, like_count: updatedMessage.like_count }
-          : secret
-      )
-    );
+  const handleMessageChange = (payload) => {
+    const { eventType, new: newMessage, old: oldMessage } = payload;
+
+    setSecrets(prevSecrets => {
+      switch (eventType) {
+        case 'INSERT':
+          return [newMessage, ...prevSecrets];
+        case 'UPDATE':
+          return prevSecrets.map(secret =>
+            secret.id === newMessage.id ? { ...secret, ...newMessage } : secret
+          );
+        case 'DELETE':
+          return prevSecrets.filter(secret => secret.id !== oldMessage.id);
+        default:
+          return prevSecrets;
+      }
+    });
+  };
+
+  const handleReplyChange = (payload) => {
+    const { eventType, new: newReply, old: oldReply } = payload;
+
+    setSecrets(prevSecrets => {
+      return prevSecrets.map(secret => {
+        if (secret.id === newReply.message_id) {
+          let updatedReplies = secret.replies || [];
+          switch (eventType) {
+            case 'INSERT':
+              updatedReplies = [...updatedReplies, newReply];
+              break;
+            case 'UPDATE':
+              updatedReplies = updatedReplies.map(reply =>
+                reply.id === newReply.id ? { ...reply, ...newReply } : reply
+              );
+              break;
+            case 'DELETE':
+              updatedReplies = updatedReplies.filter(reply => reply.id !== oldReply.id);
+              break;
+          }
+          return { ...secret, replies: updatedReplies };
+        }
+        return secret;
+      });
+    });
   };
 
   const getUserIP = async () => {
@@ -60,8 +100,10 @@ const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
 
   const deleteSecret = async (secretId) => {
     if (userIsOwner) {
-      await supabase.from('messages').delete().match({ id: secretId });
-      reloadPage();
+      const { error } = await supabase.from('messages').delete().match({ id: secretId });
+      if (error) {
+        console.error('Error deleting secret:', error);
+      }
     }
   };
 
@@ -93,6 +135,33 @@ const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
       }
 
       setLikedSecrets(prev => ({ ...prev, [secretId]: true }));
+    }
+  };
+
+  const deleteComment = async (commentId, secretId) => {
+    if (userIsOwner) {
+      try {
+        const { error } = await supabase
+          .from('replies')
+          .delete()
+          .match({ id: commentId });
+        
+        if (error) {
+          throw error;
+        }
+        
+        setSecrets(prevSecrets => 
+          prevSecrets.map(secret => 
+            secret.id === secretId
+              ? { ...secret, replies: secret.replies.filter(reply => reply.id !== commentId) }
+              : secret
+          )
+        );
+
+        console.log('Comment deleted successfully');
+      } catch (error) {
+        console.error('Error deleting comment:', error.message);
+      }
     }
   };
 
@@ -130,7 +199,7 @@ const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
                 <div className="flex-grow overflow-hidden mb-2">
                   <p className="text-white break-words whitespace-pre-wrap">
                     {secret.is_owner ? (
-                      <span className="font-bold mr-1 text-yellow-400">Nando (👑):</span>
+                      <span className="font-bold mr-1 text-yellow-400">Nando 👑:</span>
                     ) : (
                       <span className="font-bold mr-1 text-gray-400">User 🤷‍♂️:</span>
                     )}
@@ -169,6 +238,7 @@ const SecretList = ({ secrets: initialSecrets, userIsOwner }) => {
                     comment={comment}
                     secretId={secret.id}
                     userIsOwner={userIsOwner}
+                    onDelete={deleteComment}
                   />
                 ))}
                 <CommentForm secretId={secret.id} userIsOwner={userIsOwner} />

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '../supabaseClient';
-import { reloadPage, isOwner } from '../utils';
+import { isOwner } from '../utils';
 
 const SecretForm = ({ userIp }) => {
   const [secretText, setSecretText] = useState('');
@@ -9,13 +9,17 @@ const SecretForm = ({ userIp }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (secretText.trim()) {
-      await supabase.from('messages').insert([{ 
+      const { data, error } = await supabase.from('messages').insert([{ 
         content: secretText,
         ip_address: userIp,
         is_owner: isOwner(userIp)
-      }]);
-      setSecretText('');
-      reloadPage();
+      }]).select();
+
+      if (error) {
+        console.error('Error adding secret:', error);
+      } else {
+        setSecretText('');
+      }
     }
   };
 
