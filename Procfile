@@ -1,2 +1,1 @@
-release: npm run build
-web: npm run preview
+web: npm run build && npm run preview
